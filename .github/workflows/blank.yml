@@ -38,7 +38,12 @@ jobs:
       id: update_launch_template
       run: |
         # Obtém o ID do Launch Template com o nome 'app-launch-template'
-        LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates --filters "Name=launch-template-name,Values=app-launch-template" --query "LaunchTemplates[*].LaunchTemplateId" --output text)
+        LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates --filters "Name=launch-template-name,Values=app-launch-template" --query "LaunchTemplates[0].LaunchTemplateId" --output text)
+
+        if [ -z "$LAUNCH_TEMPLATE_ID" ]; then
+          echo "Launch Template ID not found"
+          exit 1
+        fi
         
         # Cria uma nova versão do Launch Template com a nova AMI
         aws ec2 create-launch-template-version --launch-template-id $LAUNCH_TEMPLATE_ID --source-version '$Latest' --launch-template-data "{\"ImageId\":\"${{ env.AMI_ID }}\"}"
