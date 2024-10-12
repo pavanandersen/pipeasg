@@ -61,11 +61,16 @@ jobs:
     - name: Restart instances in ASG
       run: |
         ASG_NAME="terraform-20241012112041704200000004"  # Substitua pelo nome do seu ASG
-        INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-instances --filters "Name=auto-scaling-group-name,Values=$ASG_NAME" --query 'AutoScalingInstances[*].InstanceId' --output text)
+        INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-instances \
+          --query "AutoScalingInstances[?AutoScalingGroupName=='$ASG_NAME'].InstanceId" --output text)
         
         echo "Instances to be restarted: $INSTANCE_IDS"
 
-        for INSTANCE_ID in $INSTANCE_IDS; do
-          echo "Restarting instance $INSTANCE_ID"
-          aws ec2 reboot-instances --instance-ids $INSTANCE_ID
-        done
+        if [ -z "$INSTANCE_IDS" ]; then
+          echo "No instances found in ASG $ASG_NAME."
+        else
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Restarting instance $INSTANCE_ID"
+            aws ec2 reboot-instances --instance-ids $INSTANCE_ID
+          done
+        fi
