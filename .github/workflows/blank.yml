@@ -1,0 +1,47 @@
+name: Update AMI and Launch Template on EC2 Changes
+
+on:
+  push:
+    branches:
+      - main  # Pode ajustar para o branch que preferir
+
+jobs:
+  update-ami:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up AWS CLI
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1  # Ajuste para a sua região
+
+    - name: Generate AMI from EC2 instance
+      id: create_ami
+      run: |
+        # Obtém o ID da instância EC2 com a tag Name=web-server
+        INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=web-server" --query "Reservations[*].Instances[*].InstanceId" --output text)
+        
+        # Cria uma AMI da instância sem reiniciar (no-reboot)
+        AMI_ID=$(aws ec2 create-image --instance-id $INSTANCE_ID --name "web-server-ami-$(date +%Y%m%d%H%M%S)" --no-reboot --output text)
+        
+        # Salva o ID da AMI em uma variável de ambiente do GitHub Actions
+        echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
+        
+        echo "Generated AMI ID: $AMI_ID"
+
+    - name: Update Launch Template with new AMI
+      id: update_launch_template
+      run: |
+        # Obtém o ID do Launch Template com o nome 'app-launch-template'
+        LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates --filters "Name=launch-template-name,Values=app-launch-template" --query "LaunchTemplates[*].LaunchTemplateId" --output text)
+        
+        # Cria uma nova versão do Launch Template com a nova AMI
+        aws ec2 create-launch-template-version --launch-template-id $LAUNCH_TEMPLATE_ID --source-version '$Latest' --launch-template-data "{\"ImageId\":\"${{ env.AMI_ID }}\"}"
+        
+        # Define a nova versão do template como a versão padrão
+        aws ec2 modify-launch-template --launch-template-id $LAUNCH_TEMPLATE_ID --default-version '$Latest'
