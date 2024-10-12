@@ -3,7 +3,7 @@ name: Update AMI and Launch Template on EC2 Changes
 on:
   push:
     branches:
-      - main  # Pode ajustar para o branch que preferir
+      - main  # Ajuste para o branch que preferir
 
 jobs:
   update-ami:
@@ -25,6 +25,11 @@ jobs:
       run: |
         # Obtém o ID da instância EC2 com a tag Name=web-server
         INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=web-server" --query "Reservations[*].Instances[*].InstanceId" --output text)
+
+        if [ -z "$INSTANCE_ID" ]; then
+          echo "Error: No EC2 instance found with tag Name=web-server"
+          exit 1
+        fi
         
         # Cria uma AMI da instância sem reiniciar (no-reboot)
         AMI_ID=$(aws ec2 create-image --instance-id $INSTANCE_ID --name "web-server-ami-$(date +%Y%m%d%H%M%S)" --no-reboot --output text)
@@ -39,12 +44,15 @@ jobs:
       run: |
         # Obtém o ID do Launch Template com o nome 'app-launch-template'
         LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates --filters "Name=launch-template-name,Values=app-launch-template" --query "LaunchTemplates[0].LaunchTemplateId" --output text)
-
-        if [ -z "$LAUNCH_TEMPLATE_ID" ]; then
-          echo "Launch Template ID not found"
+        
+        # Verifica se o Launch Template ID foi encontrado
+        if [ -z "$LAUNCH_TEMPLATE_ID" ] || [ "$LAUNCH_TEMPLATE_ID" = "None" ]; then
+          echo "Error: No Launch Template found with name 'app-launch-template'"
           exit 1
         fi
-        
+
+        echo "Launch Template ID: $LAUNCH_TEMPLATE_ID"
+
         # Cria uma nova versão do Launch Template com a nova AMI
         aws ec2 create-launch-template-version --launch-template-id $LAUNCH_TEMPLATE_ID --source-version '$Latest' --launch-template-data "{\"ImageId\":\"${{ env.AMI_ID }}\"}"
         
