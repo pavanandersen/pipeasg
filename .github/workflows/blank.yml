@@ -37,9 +37,35 @@ jobs:
         aws ec2 wait image-available --image-ids $AMI_ID
 
     - name: Update Launch Template
+      id: update_launch_template
       run: |
         LAUNCH_TEMPLATE_NAME="app-launch-template20241012112040308500000002"  # Substitua pelo nome do seu Launch Template
-        aws ec2 create-launch-template-version --launch-template-name $LAUNCH_TEMPLATE_NAME \
-          --source-version 1 --launch-template-data "{\"ImageId\":\"${{ steps.create_ami.outputs.ami_id }}\"}"
+        NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version --launch-template-name $LAUNCH_TEMPLATE_NAME \
+          --source-version 1 --launch-template-data "{\"ImageId\":\"${{ steps.create_ami.outputs.ami_id }}\"}" \
+          --query 'LaunchTemplateVersion.VersionNumber' --output text)
         
-        echo "Launch Template $LAUNCH_TEMPLATE_NAME updated with new AMI."
+        echo "New Launch Template Version: $NEW_LAUNCH_TEMPLATE_VERSION"
+        echo "::set-output name=new_launch_template_version::$NEW_LAUNCH_TEMPLATE_VERSION"
+
+    - name: Update Auto Scaling Group
+      run: |
+        ASG_NAME="terraform-20241012112041704200000004"  # Substitua pelo nome do seu ASG
+        NEW_LAUNCH_TEMPLATE_NAME="my-launch-template"  # Substitua pelo nome do seu Launch Template
+        NEW_LAUNCH_TEMPLATE_VERSION=${{ steps.update_launch_template.outputs.new_launch_template_version }}
+
+        aws autoscaling update-auto-scaling-group --auto-scaling-group-name $ASG_NAME \
+          --launch-template "${NEW_LAUNCH_TEMPLATE_NAME},${NEW_LAUNCH_TEMPLATE_VERSION}"
+
+        echo "Auto Scaling Group $ASG_NAME updated to use Launch Template $NEW_LAUNCH_TEMPLATE_NAME version $NEW_LAUNCH_TEMPLATE_VERSION."
+
+    - name: Restart instances in ASG
+      run: |
+        ASG_NAME="terraform-20241012112041704200000004"  # Substitua pelo nome do seu ASG
+        INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-instances --filters "Name=auto-scaling-group-name,Values=$ASG_NAME" --query 'AutoScalingInstances[*].InstanceId' --output text)
+        
+        echo "Instances to be restarted: $INSTANCE_IDS"
+
+        for INSTANCE_ID in $INSTANCE_IDS; do
+          echo "Restarting instance $INSTANCE_ID"
+          aws ec2 reboot-instances --instance-ids $INSTANCE_ID
+        done
