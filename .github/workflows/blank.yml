@@ -50,11 +50,11 @@ jobs:
     - name: Update Auto Scaling Group
       run: |
         ASG_NAME="terraform-20241012112041704200000004"  # Substitua pelo nome do seu ASG
-        NEW_LAUNCH_TEMPLATE_NAME="my-launch-template"  # Substitua pelo nome do seu Launch Template
+        NEW_LAUNCH_TEMPLATE_NAME="app-launch-template20241012112040308500000002"  # Substitua pelo nome do seu Launch Template
         NEW_LAUNCH_TEMPLATE_VERSION=${{ steps.update_launch_template.outputs.new_launch_template_version }}
 
         aws autoscaling update-auto-scaling-group --auto-scaling-group-name $ASG_NAME \
-          --launch-template "${NEW_LAUNCH_TEMPLATE_NAME},${NEW_LAUNCH_TEMPLATE_VERSION}"
+          --launch-template "LaunchTemplateName=${NEW_LAUNCH_TEMPLATE_NAME},Version=${NEW_LAUNCH_TEMPLATE_VERSION}"
 
         echo "Auto Scaling Group $ASG_NAME updated to use Launch Template $NEW_LAUNCH_TEMPLATE_NAME version $NEW_LAUNCH_TEMPLATE_VERSION."
 
